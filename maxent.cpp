@@ -1,5 +1,5 @@
 /*
- * $Id: maxent.cpp,v 1.7 2004/07/28 13:42:58 tsuruoka Exp $
+ * $Id: maxent.cpp,v 1.15 2005/04/27 11:22:27 tsuruoka Exp $
  */
 
 #include "maxent.h"
@@ -7,7 +7,7 @@
 #include <cstdio>
 
 using namespace std;
-
+/*
 int
 ME_Model::BLMVMFunctionGradient(double *x, double *f, double *g, int n)
 {
@@ -69,7 +69,7 @@ ME_Model::BLMVMLowerAndUpperBounds(double *xl,double *xu,int n)
   }
   return 0;
 }
-
+*/
 int
 ME_Model::perform_GIS(int C)
 {
@@ -187,14 +187,17 @@ ME_Model::make_feature_bag(const int cutoff)
 
   //  map< int, list<int> > feature2sample;
 
-  // counting for cutoff
-  ME_FeatureBag tmpfb;
-  map<int, int> count;
+  // count the occurrences of features
+#ifdef USE_HASH_MAP
+  typedef __gnu_cxx::hash_map<unsigned int, int> map_type;
+#else    
+  typedef std::map<unsigned int, int> map_type;
+#endif
+  map_type count;
   if (cutoff > 0) {
     for (std::vector<Sample>::const_iterator i = _train.begin(); i != _train.end(); i++) {
       for (std::list<int>::const_iterator j = i->positive_features.begin(); j != i->positive_features.end(); j++) {
-        int id = tmpfb.Put(ME_Feature(i->label, *j));
-        count[id]++;
+        count[ME_Feature(i->label, *j).body()]++;
       }
     }
   }
@@ -203,11 +206,9 @@ ME_Model::make_feature_bag(const int cutoff)
   for (std::vector<Sample>::const_iterator i = _train.begin(); i != _train.end(); i++, n++) {
     max_num_features = max(max_num_features, (int)(i->positive_features.size()));
     for (std::list<int>::const_iterator j = i->positive_features.begin(); j != i->positive_features.end(); j++) {
-      if (cutoff > 0) {
-        int id = tmpfb.Id(ME_Feature(i->label, *j));
-        if (count[id] <= cutoff) continue;
-      }
-      int id = _fb.Put(ME_Feature(i->label, *j));
+      const ME_Feature feature(i->label, *j);
+      if (cutoff > 0 && count[feature.body()] < cutoff) continue;
+      int id = _fb.Put(feature);
       //      cout << i->label << "\t" << *j << "\t" << id << endl;
       //      feature2sample[id].push_back(n);
     }
@@ -221,28 +222,15 @@ ME_Model::make_feature_bag(const int cutoff)
   
   _sample2feature.clear();
   _sample2feature.resize(_train.size());
-  /*
-  for (size_t i = 0; i < _train.size(); i++) {
-    _sample2feature[i].resize(_num_classes);
-  }
-  for (map<int, list<int> >::const_iterator i = feature2sample.begin(); i != feature2sample.end(); i++) {
-    for (list<int>::const_iterator j = i->second.begin(); j != i->second.end(); j++) {
-      int l = _fb.Feature(i->first).label;
-      _sample2feature[*j][l].push_back(i->first);
-      c++;
-    }
-    
-  }
-  */
 
   n = 0;
   for (std::vector<Sample>::const_iterator i = _train.begin(); i != _train.end(); i++) {
-    _sample2feature[n].resize(_num_classes);
+    //    _sample2feature[n].resize(_num_classes);
     for (std::list<int>::const_iterator j = i->positive_features.begin(); j != i->positive_features.end(); j++){
       for (int k = 0; k < _num_classes; k++) {
         int id = _fb.Id(ME_Feature(k, *j));
         if (id >= 0) {
-          _sample2feature[n][k].push_back(id);
+          _sample2feature[n].push_back(id);
           c++;
         }
       }
@@ -281,17 +269,35 @@ ME_Model::update_model_expectation()
   for (std::vector<Sample>::const_iterator i = _train.begin(); i != _train.end(); i++) {
     vector<double> membp(_num_classes);
     int max_label = 0;
+
+    double sum = 0;
+    vector<double> powv(_num_classes);
+    for (int label = 0; label < _num_classes; label++) powv[label] = 0;
+    const vector<int> & fl = _sample2feature[n];
+    for (std::vector<int>::const_iterator j = fl.begin(); j != fl.end(); j++){
+      powv[_fb.Feature(*j).label()] += _vl[*j];
+    }
+    for (int label = 0; label < _num_classes; label++) {
+      double pow = powv[label];
+      double prod = exp(pow);
+      membp[label] = prod;
+      sum += prod;
+    }
+    /*
+    const vector<int> & fl = _sample2feature[n];
     double sum = 0;
     for (int label = 0; label < _num_classes; label++) {
       double pow = 0.0;
-      const vector<int> & fl = _sample2feature[n][label];
       for (std::vector<int>::const_iterator i = fl.begin(); i != fl.end(); i++){
+        ME_Feature f = _fb.Feature(*i);
+        if (f.label() != label) continue;
         pow += _vl[*i];
       }
       double prod = exp(pow);
       membp[label] = prod;
       sum += prod;
     }
+    */
     for (int label = 0; label < _num_classes; label++) {
       membp[label] /= sum;
       if (membp[label] > membp[max_label]) max_label = label;
@@ -309,11 +315,15 @@ ME_Model::update_model_expectation()
     _vme[i] = 0;
   }
   for (int n = 0; n < (int)_train.size(); n++) {
-    for (int i = 0; i < _num_classes; i++) {
-      const vector<int> & fl = _sample2feature[n][i];
-      for (vector<int>::const_iterator j = fl.begin(); j != fl.end(); j++) {
-        _vme[*j] += membpv[n][_fb.Feature(*j).label()];
-      }
+    //    for (int i = 0; i < _num_classes; i++) {
+    //      const vector<int> & fl = _sample2feature[n][i];
+    //      for (vector<int>::const_iterator j = fl.begin(); j != fl.end(); j++) {
+    //        _vme[*j] += membpv[n][_fb.Feature(*j).label()];
+    //      }
+    //    }
+    const vector<int> & fl = _sample2feature[n];
+    for (vector<int>::const_iterator j = fl.begin(); j != fl.end(); j++) {
+      _vme[*j] += membpv[n][_fb.Feature(*j).label()];
     }
   }
   for (int i = 0; i < _fb.Size(); i++) {
@@ -336,6 +346,8 @@ ME_Model::update_model_expectation()
       }
     }
   }
+
+  //logl /= _train.size();
   
   //  fprintf(stderr, "iter =%3d  logl = %10.7f  train_acc = %7.5f\n", iter, logl, (double)ncorrect/train.size());
   //  fprintf(stderr, "logl = %10.7f  train_acc = %7.5f\n", logl, (double)ncorrect/_train.size());
@@ -360,7 +372,7 @@ ME_Model::train(const vector<ME_Sample> & vms, const int cutoff,
   for (vector<ME_Sample>::const_iterator i = vms.begin(); i != vms.end(); i++) {
     Sample s;
     s.label = _label_bag.Put(i->label);
-    for (list<string>::const_iterator j = i->features.begin(); j != i->features.end(); j++) {
+    for (vector<string>::const_iterator j = i->features.begin(); j != i->features.end(); j++) {
       s.positive_features.push_back(_featurename_bag.Put(*j));
     }
     vs.push_back(s);
@@ -370,16 +382,18 @@ ME_Model::train(const vector<ME_Sample> & vms, const int cutoff,
   for (int i = vs.size() - _nheldout; i < (int)vs.size(); i++) _heldout.push_back(vs[i]);
   vs.clear();
   
+  //  _sigma = sqrt(Nsigma2 / (double)_train.size());
   _sigma = sigma;
   _inequality_width = widthfactor / _train.size();
   
   if (cutoff > 0)
     cerr << "cutoff threshold = " << cutoff << endl;
-  if (sigma > 0)
-    cerr << "Gaussian prior sigma = " << sigma << endl;
+  if (_sigma > 0)
+    cerr << "Gaussian prior sigma = " << _sigma << endl;
+    //    cerr << "N*sigma^2 = " << Nsigma2 << " sigma = " << _sigma << endl;
   if (widthfactor > 0)
     cerr << "widthfactor = " << widthfactor << endl;
-  cerr << "making feature bag...";
+  cerr << "preparing for estimation...";
   int C = make_feature_bag(cutoff);
   cerr << "done" << endl;
   cerr << "number of samples = " << _train.size() << endl;
@@ -391,11 +405,11 @@ ME_Model::train(const vector<ME_Sample> & vms, const int cutoff,
     _vee[i] = 0;
   }
   for (int n = 0; n < (int)_train.size(); n++) {
-    const vector<int> & fl = _sample2feature[n][_train[n].label];
+    const vector<int> & fl = _sample2feature[n];
     for (vector<int>::const_iterator j = fl.begin(); j != fl.end(); j++) {
-      //      if (_fb.Feature(*j).label == _train[n].label)
-      assert(_fb.Feature(*j).label() == _train[n].label);
-      _vee[*j] += 1.0;
+      if (_fb.Feature(*j).label() == _train[n].label) {
+        _vee[*j] += 1.0;
+      }
     }
   }
   for (int i = 0; i < _fb.Size(); i++) {
@@ -431,9 +445,19 @@ void
 ME_Model::get_features(list< pair< pair<string, string>, double> > & fl)
 {
   fl.clear();
-  for (int i = 0; i < _fb.Size(); i++) {
-    ME_Feature f = _fb.Feature(i);
-    fl.push_back( make_pair(make_pair(_label_bag.Str(f.label()), _featurename_bag.Str(f.feature())), _vl[i]));
+  //  for (int i = 0; i < _fb.Size(); i++) {
+  //    ME_Feature f = _fb.Feature(i);
+  //    fl.push_back( make_pair(make_pair(_label_bag.Str(f.label()), _featurename_bag.Str(f.feature())), _vl[i]));
+  //  }
+  for (MiniStringBag::map_type::const_iterator i = _featurename_bag.begin();
+       i != _featurename_bag.end(); i++) {
+    for (int j = 0; j < _label_bag.Size(); j++) {
+      string label = _label_bag.Str(j);
+      string history = i->first;
+      int id = _fb.Id(ME_Feature(j, i->second));
+      if (id < 0) continue;
+      fl.push_back( make_pair(make_pair(label, history), _vl[id]) );
+    }
   }
 }
 
@@ -447,11 +471,20 @@ ME_Model::load_from_file(const string & filename)
   }
 
   _vl.clear();
+  _label_bag.Clear();
+  _featurename_bag.Clear();
+  _fb.Clear();
   char buf[1024];
   while(fgets(buf, 1024, fp)) {
-    char classname[256], featurename[512];
+    string line(buf);
+    string::size_type t1 = line.find_first_of('\t');
+    string::size_type t2 = line.find_last_of('\t');
+    string classname = line.substr(0, t1);
+    string featurename = line.substr(t1 + 1, t2 - (t1 + 1) );
     float lambda;
-    sscanf(buf, "%s\t%s\t%f", classname, featurename, &lambda);
+    string w = line.substr(t2+1);
+    sscanf(w.c_str(), "%f", &lambda);
+      
     int label = _label_bag.Put(classname);
     int feature = _featurename_bag.Put(featurename);
     _fb.Put(ME_Feature(label, feature));
@@ -489,10 +522,21 @@ ME_Model::save_to_file(const string & filename) const
     return false;
   }
 
-  for (int i = 0; i < _fb.Size(); i++) {
-    if (_vl[i] == 0) continue; // ignore zero-weight features
-    ME_Feature f = _fb.Feature(i);
-    fprintf(fp, "%s\t%s\t%f\n", _label_bag.Str(f.label()).c_str(), _featurename_bag.Str(f.feature()).c_str(), _vl[i]);
+  //  for (int i = 0; i < _fb.Size(); i++) {
+  //    if (_vl[i] == 0) continue; // ignore zero-weight features
+  //    ME_Feature f = _fb.Feature(i);
+  //    fprintf(fp, "%s\t%s\t%f\n", _label_bag.Str(f.label()).c_str(), _featurename_bag.Str(f.feature()).c_str(), _vl[i]);
+  //  }
+  for (MiniStringBag::map_type::const_iterator i = _featurename_bag.begin();
+       i != _featurename_bag.end(); i++) {
+    for (int j = 0; j < _label_bag.Size(); j++) {
+      string label = _label_bag.Str(j);
+      string history = i->first;
+      int id = _fb.Id(ME_Feature(j, i->second));
+      if (id < 0) continue;
+      if (_vl[id] == 0) continue; // ignore zero-weight features
+      fprintf(fp, "%s\t%s\t%f\n", label.c_str(), history.c_str(), _vl[id]);
+    }
   }
 
   fclose(fp);
@@ -520,7 +564,7 @@ vector<double>
 ME_Model::classify(ME_Sample & mes) const
 {
   Sample s;
-  for (list<string>::const_iterator j = mes.features.begin(); j != mes.features.end(); j++) {
+  for (vector<string>::const_iterator j = mes.features.begin(); j != mes.features.end(); j++) {
     int id = _featurename_bag.Id(*j);
     if (id >= 0)
       s.positive_features.push_back(id);
@@ -534,6 +578,31 @@ ME_Model::classify(ME_Sample & mes) const
 
 /*
  * $Log: maxent.cpp,v $
+ * Revision 1.15  2005/04/27 11:22:27  tsuruoka
+ * bugfix
+ * ME_Sample: list -> vector
+ *
+ * Revision 1.14  2005/04/27 10:00:42  tsuruoka
+ * remove tmpfb
+ *
+ * Revision 1.13  2005/04/26 14:25:53  tsuruoka
+ * add MiniStringBag, USE_HASH_MAP
+ *
+ * Revision 1.12  2005/02/11 10:20:08  tsuruoka
+ * modify cutoff
+ *
+ * Revision 1.11  2004/10/04 05:50:25  tsuruoka
+ * add Clear()
+ *
+ * Revision 1.10  2004/08/26 16:52:26  tsuruoka
+ * fix load_from_file()
+ *
+ * Revision 1.9  2004/08/09 12:27:21  tsuruoka
+ * change messages
+ *
+ * Revision 1.8  2004/08/04 13:55:18  tsuruoka
+ * modify _sample2feature
+ *
  * Revision 1.7  2004/07/28 13:42:58  tsuruoka
  * add AGIS
  *

@@ -1,5 +1,5 @@
 /*
- * $Id: postag.cpp,v 1.3 2004/07/29 12:40:33 tsuruoka Exp $
+ * $Id: postag.cpp,v 1.5 2004/12/21 13:54:46 tsuruoka Exp $
  */
 
 #include <stdio.h>
@@ -11,12 +11,14 @@
 #include <cmath>
 #include <set>
 #include "maxent.h"
+#include "common.h"
 
 using namespace std;
 
 const double BEAM_WIDTH = 3.0;
 //const double BEAM_WIDTH = 6.0;
 
+/*
 struct ConfusingWordTable
 {
   static const char * wl[];
@@ -39,22 +41,13 @@ const char * ConfusingWordTable::wl[] = {
 };
 
 static ConfusingWordTable confusing_word_table;
-
+*/
 
 void
 tokenize(const string & s1, list<string> & lt);
 
-struct Token
-{
-  string str;
-  string pos;
-  string prd;
-  Token(string s, string p) : str(s), pos(p) {}
-};
 
-typedef vector<Token> Sentence;
-
-static string
+string
 normalize(const string & s)
 {
   string tmp(s);
@@ -89,9 +82,9 @@ mesample(const vector<Token> &vt, int i, const string & prepos)
   //  sample.features.push_back("W-2_" + prestr2);
   //  sample.features.push_back("W+2_" + poststr2);
   
-  string e_prestr  = "^^^" + prestr;
-  string e_str     = "^^^" + str;
-  string e_poststr = "^^^" + poststr;
+  //  string e_prestr  = "^^^" + prestr;
+  //  string e_str     = "^^^" + str;
+  //  string e_poststr = "^^^" + poststr;
   //  sample.features.push_back("W-1+1_" + prestr + "_" + poststr);
 
   sample.features.push_back("W-10_" + prestr + "_" + str);
@@ -259,6 +252,12 @@ string postag(const string & s, const ME_Model & me)
 
 /*
  * $Log: postag.cpp,v $
+ * Revision 1.5  2004/12/21 13:54:46  tsuruoka
+ * add bidir.cpp
+ *
+ * Revision 1.4  2004/12/20 12:06:24  tsuruoka
+ * change the data
+ *
  * Revision 1.3  2004/07/29 12:40:33  tsuruoka
  * modify features
  *

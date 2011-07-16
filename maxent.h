@@ -1,5 +1,5 @@
 /*
- * $Id: maxent.h,v 1.7 2004/07/29 05:51:13 tsuruoka Exp $
+ * $Id: maxent.h,v 1.14 2005/04/27 11:22:27 tsuruoka Exp $
  */
 
 #ifndef __MAXENT_H_
@@ -15,11 +15,17 @@
 #include <cassert>
 //#include "blmvm.h"
 
-// the data format of samples for training and testing
+#define USE_HASH_MAP  // if you encounter errors with hash, try commenting out this line. (the program will be a bit slower, though)
+
+#ifdef USE_HASH_MAP
+#include <ext/hash_map>
+#endif
+
+// the data format of each sample for training/testing
 struct ME_Sample
 {
   std::string label;
-  std::list<std::string> features;
+  std::vector<std::string> features;
 };
 
 // for those who want to use load_from_array()
@@ -29,6 +35,7 @@ typedef struct ME_Model_Data
   char * feature;
   double weight;
 } ME_Model_Data;
+
 
 class ME_Model
 {
@@ -41,8 +48,9 @@ public:
   bool save_to_file(const std::string & filename) const;
   int num_classes() const { return _num_classes; }
   std::string get_class_label(int i) const { return _label_bag.Str(i); }
+  int get_class_id(const std::string & s) const { return _label_bag.Id(s); }
   void get_features(std::list< std::pair< std::pair<std::string, std::string>, double> > & fl);
-  void setparam_heldout(const int h, const int n) { _nheldout = h; _early_stopping_n = n; };
+  void set_heldout(const int h, const int n) { _nheldout = h; _early_stopping_n = n; };
   bool load_from_array(const ME_Model_Data data[]);
 
   ME_Model() {
@@ -59,35 +67,38 @@ private:
 
   struct ME_Feature
   {
-    bool operator<(const ME_Feature & x) const {
-      return _body < x._body;
-    }
     ME_Feature(const int l, const int f) : _body((l << 24) + f) {
       assert(l >= 0 && l < 256);
       assert(f >= 0 && f <= 0xffffff);
     };
     int label() const { return _body >> 24; }
     int feature() const { return _body & 0xffffff; }
+    unsigned int body() const { return _body; }
   private:
     unsigned int _body;
   };
 
   struct ME_FeatureBag
   {
-    std::map<ME_Feature, int> mef2id;
+#ifdef USE_HASH_MAP
+    typedef __gnu_cxx::hash_map<unsigned int, int> map_type;
+#else    
+    typedef std::map<unsigned int, int> map_type;
+#endif
+    map_type mef2id;
     std::vector<ME_Feature> id2mef;
     int Put(const ME_Feature & i) {
-      std::map<ME_Feature, int>::const_iterator j = mef2id.find(i);
+      map_type::const_iterator j = mef2id.find(i.body());
       if (j == mef2id.end()) {
         int id = id2mef.size();
         id2mef.push_back(i);
-        mef2id[i] = id;
+        mef2id[i.body()] = id;
         return id;
       }
       return j->second;
     }
     int Id(const ME_Feature & i) const {
-      std::map<ME_Feature, int>::const_iterator j = mef2id.find(i);
+      map_type::const_iterator j = mef2id.find(i.body());
       if (j == mef2id.end()) {
         return -1;
       }
@@ -100,14 +111,67 @@ private:
     int Size() const {
       return id2mef.size();
     }
+    void Clear() {
+      mef2id.clear();
+      id2mef.clear();
+    }
   };
 
-  struct StringBag
+  struct hashfun_str
   {
-    std::map<std::string, int> str2id;
+    size_t operator()(const std::string& s) const {
+      assert(sizeof(int) == 4 && sizeof(char) == 1);
+      const int* p = reinterpret_cast<const int*>(s.c_str());
+      size_t v = 0;
+      int n = s.size() / 4;
+      for (int i = 0; i < n; i++, p++) {
+        //      v ^= *p;
+        v ^= *p << (4 * (i % 2)); // note) 0 <= char < 128
+      }
+      int m = s.size() % 4;
+      for (int i = 0; i < m; i++) {
+        v ^= s[4 * n + i] << (i * 8);
+      }
+      return v;
+    }
+  };
+
+  struct MiniStringBag
+  {
+#ifdef USE_HASH_MAP
+    typedef __gnu_cxx::hash_map<std::string, int, hashfun_str> map_type;
+#else    
+    typedef std::map<std::string, int> map_type;
+#endif
+    int _size;
+    map_type str2id;
+    MiniStringBag() : _size(0) {}
+    int Put(const std::string & i) {
+      map_type::const_iterator j = str2id.find(i);
+      if (j == str2id.end()) {
+        int id = _size;
+        _size++;
+        str2id[i] = id;
+        return id;
+      }
+      return j->second;
+    }
+    int Id(const std::string & i) const {
+      map_type::const_iterator j = str2id.find(i);
+      if (j == str2id.end())  return -1;
+      return j->second;
+    }
+    int Size() const { return _size; }
+    void Clear() { str2id.clear(); _size = 0; }
+    map_type::const_iterator begin() const { return str2id.begin(); }
+    map_type::const_iterator end()   const { return str2id.end(); }
+  };
+
+  struct StringBag : public MiniStringBag
+  {
     std::vector<std::string> id2str;
     int Put(const std::string & i) {
-      std::map<std::string, int>::const_iterator j = str2id.find(i);
+      map_type::const_iterator j = str2id.find(i);
       if (j == str2id.end()) {
         int id = id2str.size();
         id2str.push_back(i);
@@ -116,25 +180,19 @@ private:
       }
       return j->second;
     }
-    int Id(const std::string & i) const {
-      std::map<std::string, int>::const_iterator j = str2id.find(i);
-      if (j == str2id.end()) {
-        return -1;
-      }
-      return j->second;
-    }
     std::string Str(const int id) const {
       assert(id >= 0 && id < (int)id2str.size());
       return id2str[id];
     }
-    int Size() const {
-      return id2str.size();
+    int Size() const { return id2str.size(); }
+    void Clear() {
+      str2id.clear();
+      id2str.clear();
     }
   };
-
   
   StringBag _label_bag;
-  StringBag _featurename_bag;
+  MiniStringBag _featurename_bag;
   double _sigma; // Gaussian prior
   double _inequality_width;
   std::vector<double> _vl;  // vector of lambda
@@ -144,7 +202,7 @@ private:
   int _num_classes;
   std::vector<double> _vee;  // empirical expectation
   std::vector<double> _vme;  // empirical expectation
-  std::vector< std::vector< std::vector<int> > > _sample2feature;
+  std::vector< std::vector< int > > _sample2feature;
   std::vector< Sample > _train;
   std::vector< Sample > _heldout;
   double _train_error;   // current error rate on the training data
@@ -160,17 +218,16 @@ private:
   double update_model_expectation();
   int perform_LMVM();
   int perform_GIS(int C);
-
+  /*
   // BLMVM
-  //  int BLMVMComputeFunctionGradient(BLMVM blmvm, BLMVMVec X,double *f,BLMVMVec G);
-  //  int BLMVMComputeBounds(BLMVM blmvm, BLMVMVec XL, BLMVMVec XU);
+  int BLMVMComputeFunctionGradient(BLMVM blmvm, BLMVMVec X,double *f,BLMVMVec G);
+  int BLMVMComputeBounds(BLMVM blmvm, BLMVMVec XL, BLMVMVec XU);
   int BLMVMSolve(double *x, int n);
   int BLMVMFunctionGradient(double *x, double *f, double *g, int n);
   int BLMVMLowerAndUpperBounds(double *xl,double *xu,int n);
-  //  int Solve_BLMVM(BLMVM blmvm, BLMVMVec X);
-  
+  int Solve_BLMVM(BLMVM blmvm, BLMVMVec X);
+  */
 };
-
 
 
 #endif
@@ -178,6 +235,28 @@ private:
 
 /*
  * $Log: maxent.h,v $
+ * Revision 1.14  2005/04/27 11:22:27  tsuruoka
+ * bugfix
+ * ME_Sample: list -> vector
+ *
+ * Revision 1.13  2005/04/27 10:20:19  tsuruoka
+ * MiniStringBag -> StringBag
+ *
+ * Revision 1.12  2005/04/27 10:00:42  tsuruoka
+ * remove tmpfb
+ *
+ * Revision 1.11  2005/04/26 14:25:53  tsuruoka
+ * add MiniStringBag, USE_HASH_MAP
+ *
+ * Revision 1.10  2004/10/04 05:50:25  tsuruoka
+ * add Clear()
+ *
+ * Revision 1.9  2004/08/09 12:27:21  tsuruoka
+ * change messages
+ *
+ * Revision 1.8  2004/08/04 13:55:19  tsuruoka
+ * modify _sample2feature
+ *
  * Revision 1.7  2004/07/29 05:51:13  tsuruoka
  * remove modeldata.h
  *

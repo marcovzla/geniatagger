@@ -1,24 +1,29 @@
 
 
-             GENIA Part-of-Speech tagger
+   An English Part-Of-Speech Tagger with Bidirectional Inference
 
-                  Tsujii laboratory
-                 University of Tokyo
-
-
-- Compile & run
-
-Currently, this tagger has been tested only on linux.
-To build the tagger, 
-
-> make
-
-To use the tagger, 
-
-> ./geniatagger < RAWTEXT > TAGGEDTEXT
+                    Tsujii laboratory
+                   University of Tokyo
 
 
-Please send questions and comments to genia@is.s.u-tokyo.ac.jp.
+1. How to build 
+
+  You need gcc to build the tagger.
+
+  > make
+
+  if you encounter errors with hash, try commenting out "#define USE_HASH_MAP"
+  in "maxent.h".
+
+2. How to use
+
+  Prepare a text file containing one sentence per line, then
+
+  > ./tagger < TEXTFILE > TAGGEDTEXT
+
+  
+
+Please send questions and comments to tsuruoka@is.s.u-tokyo.ac.jp.
 ---------------------------------
 Tsujii laboratory,
 Department of Computer Science,
