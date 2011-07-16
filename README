@@ -1,17 +1,16 @@
 
 
                      GENIA Tagger
-  - part-of-speech tagging and shallow parsing for biomedical text -
 
-                    Tsujii laboratory
-                   University of Tokyo
+                   Tsujii laboratory
+                  University of Tokyo
 
 
 1. How to build 
 
   You need gcc to build the tagger.
 
-  > make
+  % make
 
   if you encounter errors with hash, try commenting out "#define USE_HASH_MAP"
   in "maxent.h".
@@ -21,17 +20,19 @@
 
   Prepare a text file containing one sentence per line, then
 
-  > ./geniatagger < TEXTFILE > TAGGEDTEXT
+  % ./geniatagger < TEXTFILE > TAGGEDTEXT
 
-  The tagger outputs the base forms, part-of-speech (POS) tags, and chunk tags
-  in the following tab-separated format.
+  The tagger outputs the base forms, part-of-speech (POS) tags, chunk tags,
+  and named entity (NE) tags in the following tab-separated format.
 
-  word1	base1	POStag1	chunktag1
-  word2	base2	POStag2	chunktag2
+  word1	base1	POStag1	chunktag1 NEtag1
+  word2	base2	POStag2	chunktag2 NEtag2
     :     :        :       :
 
-  Chunks are represented in the IOB2 format (B for BEGIN, I for INSIDE, and O
-  for OUTSIDE).
+  Chunks and named entities are represented in the IOB2 format (B for BEGIN,
+  I for INSIDE, and O for OUTSIDE). The named entity tagger is trained on
+  the NLPBA data set [3], which contains five semantic classes (DNA, RNA,
+  cell_line, cell_type, and PROTEIN).
 
 
  2.1 Tokenization
@@ -55,6 +56,7 @@ References
     Part-of-Speech Tagger for Biomedical Text, Advances in Informatics -
     10th Panhellenic Conference on Informatics, LNCS 3746, pp. 382-392, 2005
 
+[3] http://research.nii.ac.jp/~collier/workshops/JNLPBA04st.htm
 
 Please send questions and comments to tsuruoka@is.s.u-tokyo.ac.jp.
 ---------------------------------

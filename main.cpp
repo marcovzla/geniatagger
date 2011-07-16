@@ -20,20 +20,22 @@ void init_morphdic();
 void help()
 {
   cout << "Usage: geniatagger [OPTION]... [FILE]..." << endl;
-  cout << "Analyze English sentences and print the base forms, part-of-speech tags, and" << endl;
-  cout << "chunk tags." << endl;
+  cout << "Analyze English sentences and print the base forms, part-of-speech tags, " << endl;
+  cout << "chunk tags, and named entity tags." << endl;
   cout << endl;
   cout << "Options:" << endl;
-  cout << "  -nt        don't perform tokenization" << endl;
-  cout << "  --help     display this help and exit" << endl;
+  cout << "  -nt          don't perform tokenization." << endl;
+  cout << "  --help       display this help and exit." << endl;
   cout << endl;
   cout << "Report bugs to <tsuruoka@is.s.u-tokyo.ac.jp>." << endl;
 }
 
 void version()
 {
-  cout << "GENIA Tagger 2.0.1" << endl << endl;
+  cout << "GENIA Tagger 3.0" << endl << endl;
 }
+
+extern void load_ne_models();
 
 int main(int argc, char** argv)
 {
@@ -77,40 +79,21 @@ int main(int argc, char** argv)
     cerr << ".";
   }
   cerr << "done." << endl;
+
+  load_ne_models();
   
   string line;
+  int n = 1;
   while (getline(*is, line)) {
+    if (line.size() > 1024) {
+      cerr << "warning: the sentence seems to be too long at line " << n;
+      cerr << " (please note that the input should be one-sentence-per-line)." << endl;
+    }
     string postagged = bidir_postag(line, vme, vme_chunking, dont_tokenize);
     cout << postagged << endl;
+    n++;
   }
   
 }
 
-/*
- * $Log: main.cpp,v $
- * Revision 1.8  2005/02/16 10:45:39  tsuruoka
- * acl05 submit
- *
- * Revision 1.7  2005/01/10 13:44:36  tsuruoka
- * a
- *
- * Revision 1.6  2004/12/30 10:34:56  tsuruoka
- * add bidir_decode_search
- *
- * Revision 1.5  2004/12/25 10:47:12  tsuruoka
- * add load_tag_dictionary()
- *
- * Revision 1.4  2004/12/25 09:22:57  tsuruoka
- * add make_tag_dictionary()
- *
- * Revision 1.3  2004/12/21 13:54:46  tsuruoka
- * add bidir.cpp
- *
- * Revision 1.2  2004/12/20 12:06:24  tsuruoka
- * change the data
- *
- * Revision 1.1  2004/07/16 13:40:42  tsuruoka
- * init
- *
- */
 

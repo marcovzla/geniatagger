@@ -606,6 +606,8 @@ public:
 
 ParenConverter paren_converter;
 
+extern int netagging(vector<Token> & vt);
+
 string
 bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme, bool dont_tokenize)
 {
@@ -634,7 +636,8 @@ bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Mod
 
   bidir_chuning_decode_beam(vt, chunking_vme);
   
-  
+  netagging(vt);
+
   string tmp;
   for (size_t i = 0; i < vt.size(); i++) {
     string s = vt[i].str;
@@ -648,7 +651,8 @@ bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Mod
     tmp += s + "\t";
     tmp += base_form(s, p) + "\t";
     tmp += p + "\t";
-    tmp += vt[i].cprd + "\n";
+    tmp += vt[i].cprd + "\t";
+    tmp += vt[i].ne + "\n";
   }
   return tmp;
 }

@@ -1,5 +1,5 @@
 /*
- * $Id: maxent.h,v 1.14 2005/04/27 11:22:27 tsuruoka Exp $
+ * $Id: maxent.h,v 1.24 2006/08/21 17:30:38 tsuruoka Exp $
  */
 
 #ifndef __MAXENT_H_
@@ -16,19 +16,45 @@
 //#include "blmvm.h"
 
 #define USE_HASH_MAP  // if you encounter errors with hash, try commenting out this line. (the program will be a bit slower, though)
-
 #ifdef USE_HASH_MAP
 #include <ext/hash_map>
 #endif
 
-// the data format of each sample for training/testing
+//
+// data format for each sample for training/testing
+//
 struct ME_Sample
 {
+public:
+  ME_Sample() : label("") {};
+  ME_Sample(const std::string & l) : label(l) {};
+  void set_label(const std::string & l) { label = l; }
+
+  // to add a binary feature
+  void add_feature(const std::string & f) {
+    features.push_back(f);   
+  }
+
+  // to add a real-valued feature
+  void add_feature(const std::string & s, const double d) {
+    rvfeatures.push_back(std::pair<std::string, double>(s, d)); 
+  }
+
+public:
   std::string label;
   std::vector<std::string> features;
+  std::vector<std::pair<std::string, double> > rvfeatures;
+
+  // obsolete
+  void add_feature(const std::pair<std::string, double> & f) {  
+    rvfeatures.push_back(f); // real-valued features
+  }
 };
 
+
+//
 // for those who want to use load_from_array()
+//
 typedef struct ME_Model_Data
 {
   char * label;
@@ -41,8 +67,8 @@ class ME_Model
 {
 public:
 
-  int train(const std::vector<ME_Sample> & train,
-            const int cutoff = 0, const double sigma = 0, const double widthfactor = 0);
+  void add_training_sample(const ME_Sample & s);
+  int train(const int cutoff = 0, const double sigma = 0, const double widthfactor = 0);
   std::vector<double> classify(ME_Sample & s) const;
   bool load_from_file(const std::string & filename);
   bool save_to_file(const std::string & filename) const;
@@ -50,29 +76,56 @@ public:
   std::string get_class_label(int i) const { return _label_bag.Str(i); }
   int get_class_id(const std::string & s) const { return _label_bag.Id(s); }
   void get_features(std::list< std::pair< std::pair<std::string, std::string>, double> > & fl);
-  void set_heldout(const int h, const int n) { _nheldout = h; _early_stopping_n = n; };
+  void set_heldout(const int h, const int n = 0) { _nheldout = h; _early_stopping_n = n; };
   bool load_from_array(const ME_Model_Data data[]);
+  void set_reference_model(const ME_Model & ref_model) { _ref_modelp = &ref_model; };
 
   ME_Model() {
     _nheldout = 0;
     _early_stopping_n = 0;
+    _ref_modelp = NULL;
   }
+
+public:
+  // obsolete. just for downward compatibility
+  int train(const std::vector<ME_Sample> & train,
+            const int cutoff = 0, const double sigma = 0, const double widthfactor = 0);
 
 private:  
   
   struct Sample {
     int label;
-    std::list<int> positive_features;
+    std::vector<int> positive_features;
+    std::vector<std::pair<int, double> > rvfeatures;
+    std::vector<double> ref_pd; // reference probability distribution
+    bool operator<(const Sample & x) const {
+      for (int i = 0; i < positive_features.size(); i++) {
+        if (i >= x.positive_features.size()) return false;
+        int v0 = positive_features[i];
+        int v1 = x.positive_features[i];
+        if (v0 < v1) return true;
+        if (v0 > v1) return false;
+      }
+      return false;
+    }
   };
 
   struct ME_Feature
   {
-    ME_Feature(const int l, const int f) : _body((l << 24) + f) {
-      assert(l >= 0 && l < 256);
+    enum { MAX_LABEL_TYPES = 255 };
+      
+    //    ME_Feature(const int l, const int f) : _body((l << 24) + f) {
+    //      assert(l >= 0 && l < 256);
+    //      assert(f >= 0 && f <= 0xffffff);
+    //    };
+    //    int label() const { return _body >> 24; }
+    //    int feature() const { return _body & 0xffffff; }
+    ME_Feature(const int l, const int f) : _body((f << 8) + l) {
+      assert(l >= 0 && l <= MAX_LABEL_TYPES);
       assert(f >= 0 && f <= 0xffffff);
     };
-    int label() const { return _body >> 24; }
-    int feature() const { return _body & 0xffffff; }
+    int label() const { return _body & 0xff; }
+    int feature() const { return _body >> 8; }
     unsigned int body() const { return _body; }
   private:
     unsigned int _body;
@@ -190,7 +243,8 @@ private:
       id2str.clear();
     }
   };
-  
+
+  std::vector<Sample> _vs; // vector of training_samples
   StringBag _label_bag;
   MiniStringBag _featurename_bag;
   double _sigma; // Gaussian prior
@@ -202,24 +256,27 @@ private:
   int _num_classes;
   std::vector<double> _vee;  // empirical expectation
   std::vector<double> _vme;  // empirical expectation
-  std::vector< std::vector< int > > _sample2feature;
-  std::vector< Sample > _train;
+  std::vector< std::vector< int > > _feature2mef;
   std::vector< Sample > _heldout;
   double _train_error;   // current error rate on the training data
   double _heldout_error; // current error rate on the heldout data
   int _nheldout;
   int _early_stopping_n;
   std::vector<double> _vhlogl;
+  const ME_Model * _ref_modelp;
 
   double heldout_likelihood();
-  void conditional_probability(const Sample & nbs, std::vector<double> & membp) const;
+  int conditional_probability(const Sample & nbs, std::vector<double> & membp) const;
   int make_feature_bag(const int cutoff);
   int classify(const Sample & nbs, std::vector<double> & membp) const;
   double update_model_expectation();
   int perform_LMVM();
   int perform_GIS(int C);
-  /*
+  void set_ref_dist(Sample & s) const;
+  void init_feature2mef();
+
   // BLMVM
+  /*
   int BLMVMComputeFunctionGradient(BLMVM blmvm, BLMVMVec X,double *f,BLMVMVec G);
   int BLMVMComputeBounds(BLMVM blmvm, BLMVMVec XL, BLMVMVec XU);
   int BLMVMSolve(double *x, int n);
@@ -235,6 +292,38 @@ private:
 
 /*
  * $Log: maxent.h,v $
+ * Revision 1.24  2006/08/21 17:30:38  tsuruoka
+ * use MAX_LABEL_TYPES
+ *
+ * Revision 1.23  2006/07/25 13:19:53  tsuruoka
+ * sort _vs[]
+ *
+ * Revision 1.22  2006/07/18 11:13:15  tsuruoka
+ * modify comments
+ *
+ * Revision 1.21  2006/07/18 10:02:15  tsuruoka
+ * remove sample2feature[]
+ * speed up conditional_probability()
+ *
+ * Revision 1.20  2006/07/18 05:10:51  tsuruoka
+ * add ref_dist
+ *
+ * Revision 1.19  2005/12/23 10:33:02  tsuruoka
+ * support real-valued features
+ *
+ * Revision 1.18  2005/12/23 09:15:29  tsuruoka
+ * modify _train to reduce memory consumption
+ *
+ * Revision 1.17  2005/10/28 13:02:34  tsuruoka
+ * set_heldout(): add default value
+ * Feature()
+ *
+ * Revision 1.16  2005/09/12 13:51:16  tsuruoka
+ * Sample: list -> vector
+ *
+ * Revision 1.15  2005/09/12 13:27:10  tsuruoka
+ * add add_training_sample()
+ *
  * Revision 1.14  2005/04/27 11:22:27  tsuruoka
  * bugfix
  * ME_Sample: list -> vector
