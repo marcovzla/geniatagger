@@ -1,0 +1,26 @@
+
+
+             GENIA Part-of-Speech tagger
+
+                  Tsujii laboratory
+                 University of Tokyo
+
+
+- Compile & run
+
+Currently, this tagger has been tested only on linux.
+To build the tagger, 
+
+> make
+
+To use the tagger, 
+
+> ./geniatagger < RAWTEXT > TAGGEDTEXT
+
+
+Please send questions and comments to genia@is.s.u-tokyo.ac.jp.
+---------------------------------
+Tsujii laboratory,
+Department of Computer Science,
+University of Tokyo
+http://www-tsujii.is.s.u-tokyo.ac.jp/
