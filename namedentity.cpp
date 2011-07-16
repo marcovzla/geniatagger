@@ -99,7 +99,8 @@ static ME_Sample mesample(const string & label, const vector<Token> &vt, int beg
 
   mes.label = label;
 
-  char buf[1000];
+  const int BUFLEN = 1000;
+  char buf[BUFLEN];
 
   string s;
 
@@ -172,6 +173,7 @@ static ME_Sample mesample(const string & label, const vector<Token> &vt, int beg
   string whole = "";
   bool contain_comma = false;
   for (int i = begin; i < end; i++) {
+    if (s.size() + vt[i].str.size() > BUFLEN-100) break;
     s += normalize(vt[i].str);
     whole += vt[i].str;
   }
@@ -235,6 +237,7 @@ static bool is_candidate(const Sentence & s, const int begin, const int end)
   if (word_info[s[begin].str].edge_prob() < 0.01) return false;
   if (word_info[s[end-1].str].edge_prob() < 0.01) return false;
   //  if (end - begin > 10) return false;
+  if (end - begin > 30) return false;
 
   int penalty = 0;
   int kakko = 0;
