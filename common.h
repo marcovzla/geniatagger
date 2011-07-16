@@ -13,6 +13,8 @@ struct Token
   std::string str;
   std::string pos;
   std::string prd;
+  std::string cprd;// for chunking
+  std::string tag; // for chunking
   Token(std::string s, std::string p) : str(s), pos(p) {}
 };
 

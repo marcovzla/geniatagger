@@ -13,202 +13,70 @@
 
 using namespace std;
 
-bool IGNORE_DISTINCTION_BETWEEN_NNP_AND_NN = false;
+string bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & cvme);
+void bidir_chunking(vector<Sentence> & vs, const vector<ME_Model> & vme);
+void init_morphdic();
 
-const int NUM_TRAIN_SENTENCES = 99999999;
-//const int NUM_TRAIN_SENTENCES = 10000;
-//const int NUM_TRAIN_SENTENCES = 2000;
-
-const int NUM_TEST_SENTENCES = 99999999;
-
-//ME_Sample mesample(const vector<Token> &vt, int i, const string & prepos, const string & prepos2);
-ME_Sample mesample(const vector<Token> &vt, int i, const string & prepos);
-void viterbi(vector<Token> & vt, const ME_Model & me);
-string postag(const string & s, const ME_Model & me);
-string bidir_postag(const string & s, const vector<ME_Model> & vme);
-
-void
-bidir_postagging(vector<Sentence> & vs,
-                 const multimap<string, string> & tagdic,
-                 const vector<ME_Model> & vme);
-
-int
-bidir_train(const vector<Sentence> & vs, int para);
-
-int train(const vector<Sentence> & vs, ME_Model & me)
+void help()
 {
-  vector<ME_Sample> train_samples;
-
-  cerr << "extracting features...";
-  int n = 0;
-  for (vector<Sentence>::const_iterator i = vs.begin(); i != vs.end(); i++) {
-    const Sentence & s = *i;
-    for (int j = 0; j < s.size(); j++) {
-      string prepos = "BOS";
-      if (j > 0) prepos = s[j-1].pos;
-      //      string prepos2 = "BOS";
-      //      if (j > 1) prepos = s[j-2].pos;
-      //      train_samples.push_back(mesample(s, j, prepos, prepos2));
-      train_samples.push_back(mesample(s, j, prepos));
-    }
-  }
-  cerr << "done" << endl;
-
-  //  me.learn(train_samples, 1000, 0, 500.0);
-  //  me.learn(train_samples, 1000, 3, 500.0);
-  //  me.learn(train_samples, 10000, 0, 0, 0.1);
-  //  me.set_heldout(10000, 0);
-  me.set_heldout(1000, 0);
-  me.train(train_samples, 0, 1000);
-  //  me.train(train_samples, 0, 0, 1.0);
+  cout << "Usage: geniatagger [OPTION]... [FILE]..." << endl;
+  cout << "Analyze English sentences and print the base forms, part-of-speech tags, and" << endl;
+  cout << "chunk tags." << endl;
+  cout << endl;
+  cout << "Options:" << endl;
+  cout << "  --help     display this help and exit" << endl;
+  cout << endl;
+  cout << "Report bugs to <tsuruoka@is.s.u-tokyo.ac.jp>." << endl;
 }
 
-void deterministic(vector<Token> & vt, const ME_Model & me)
+void version()
 {
-  for (int i = 0; i < vt.size(); i++) {
-    string prepos = "BOS";
-    if (i > 0) prepos = vt[i-1].prd;
-    //    string prepos2 = "BOS";
-    //    if (i > 1) prepos2 = vt[i-2].prd;
-    //    ME_Sample mes = mesample(vt, i, prepos, prepos2);
-    ME_Sample mes = mesample(vt, i, prepos);
-    //    vector<double> membp(me.num_classes());
-    //    vt[i].prd = me.classify(mes, &membp);
-    vector<double> membp = me.classify(mes);
-    vt[i].prd = mes.label;
-  }
+  cout << "GENIA Tagger 2.0" << endl << endl;
 }
-
-void postagging(vector<Sentence> & vs, const ME_Model & me)
-{
-  int num_classes = me.num_classes();
-
-  cerr << "now tagging";
-  int n = 0;
-  for (vector<Sentence>::iterator i = vs.begin(); i != vs.end(); i++) {
-    Sentence & s = *i;
-    //    bidir_decode_deterministic(s, me);
-    //    viterbi(s, me);
-    deterministic(s, me);
-    if (n++ % 10 == 0) cerr << ".";
-  }
-  cerr << endl;
-}
-
-void evaluate(const vector<Sentence> & vs)
-{
-  int ncorrect = 0;
-  int ntotal = 0;
-  for (vector<Sentence>::const_iterator i = vs.begin(); i != vs.end(); i++) {
-    const Sentence & s = *i;
-    for (int j = 0; j < s.size(); j++) {
-      ntotal++;
-      string pos = s[j].pos;
-      string prd = s[j].prd;
-      if (IGNORE_DISTINCTION_BETWEEN_NNP_AND_NN) {      
-        if (pos == "NNP") pos = "NN";
-        if (pos == "NNPS") pos = "NNS";
-        if (prd == "NNP") prd = "NN";
-        if (prd == "NNPS") prd = "NNS";
-      }
-      if (pos == prd) ncorrect++;
-      //      cout << s[j].str << "\t" << s[j].pos << "\t" << s[j].prd << endl;
-    }
-  }
-  fprintf(stderr, "%d / %d = %f\n", ncorrect, ntotal, (double)ncorrect / ntotal);
-}
-
-void load_tag_dictionary(const string & filename, multimap<string, string> & tagdic)
-{
-  tagdic.clear();
-  ifstream ifile(filename.c_str());
-  if (!ifile) {
-    cerr << "cannot open " << filename << endl;
-    exit(1);
-  }
-  string line;
-  while (getline(ifile, line)) {
-    istringstream is(line.c_str());
-    string str, tag;
-    is >> str >> tag;
-    tagdic.insert(pair<string, string>(str, tag));
-  }
-  ifile.close();
-}
-
-void make_tag_dictionary(const vector<Sentence> & vs)
-{
-  multimap<string, string> wt;
-  for (vector<Sentence>::const_iterator i = vs.begin(); i != vs.end(); i++) {
-    const Sentence & s = *i;
-    for (int j = 0; j < s.size(); j++) {
-      //      wt[s[j].str] = s[j].pos;
-      bool found = false;
-      for (multimap<string, string>::const_iterator k = wt.lower_bound(s[j].str);
-           k !=  wt.upper_bound(s[j].str); k++) {
-        if (k->second ==  s[j].pos) { found = true; break; }
-      }
-      if (found) continue;
-      wt.insert(pair<string, string>(s[j].str, s[j].pos));
-    }
-  }
-  for (multimap<string, string>::const_iterator i = wt.begin(); i != wt.end(); i++) {
-    cout << i->first << '\t' << i->second << endl;
-  }
-
-}
-
-void read_pos(const string & filename, vector<Sentence> & vs, int num_sentences = -1)
-{
-  ifstream ifile(filename.c_str());
-
-  string line;
-  int n = 0;
-  cerr << "reading " << filename;
-  while (getline(ifile,line)) {
-    istringstream is(line);
-    string s;
-    Sentence sentence;
-    while (is >> s) {
-      string::size_type i = s.find_last_of('/');
-      string str = s.substr(0, i);
-      string pos = s.substr(i+1);
-      if (str == "-LRB-" && pos == "-LRB") { str = "("; pos = "("; }
-      if (str == "-RRB-" && pos == "-RRB") { str = ")"; pos = ")"; }
-      if (str == "-LSB-" && pos == "-LSB") { str = "["; pos = "["; }
-      if (str == "-RSB-" && pos == "-RSB") { str = "]"; pos = "]"; }
-      if (str == "-LCB-" && pos == "-LCB") { str = "{"; pos = "{"; }
-      if (str == "-RCB-" && pos == "-RCB") { str = "}"; pos = "}"; }
-      Token t(str, pos);
-      sentence.push_back(t);
-    }
-    vs.push_back(sentence);
-    if (vs.size() >= num_sentences) break;
-    if (n++ % 10000 == 0) cerr << ".";
-  }
-  cerr << endl;
-
-  ifile.close();
-}
-
 
 int main(int argc, char** argv)
 {
-  int para = -1;
-  if (argc == 2) para = atoi(argv[1]);
+  istream *is(&std::cin);
+
+  string ifilename, ofilename;
+  for (int i = 1; i < argc; i++) {
+    string v = argv[i];
+    if (v == "--help") { help(); exit(0); }
+    ifilename = argv[i];
+  }
+  ifstream ifile;
+  if (ifilename != "" && ifilename != "-") {
+    ifile.open(ifilename.c_str());
+    if (!ifile) { cerr << "error: cannot open " << ifilename << endl; exit(1); }
+    is = &ifile;
+  }
+                                                                      
+  init_morphdic();
 
   vector<ME_Model> vme(16);
 
+  cerr << "loading pos_models";
   for (int i = 0; i < 16; i++) {
     char buf[1000];
     sprintf(buf, "./models_medline/model.bidir.%d", i);
-    cerr << "loading " << string(buf) << endl;
     vme[i].load_from_file(buf);
+    cerr << ".";
   }
+  cerr << "done." << endl;
 
+  cerr << "loading chunk_models";
+  vector<ME_Model> vme_chunking(16);
+  for (int i = 0; i < 8; i +=2 ) {
+    char buf[1000];
+    sprintf(buf, "./models_chunking/model.bidir.%d", i);
+    vme_chunking[i].load_from_file(buf);
+    cerr << ".";
+  }
+  cerr << "done." << endl;
+  
   string line;
-  while (getline(cin, line)) {
-    string postagged = bidir_postag(line, vme);
+  while (getline(*is, line)) {
+    string postagged = bidir_postag(line, vme, vme_chunking);
     cout << postagged << endl;
   }
   

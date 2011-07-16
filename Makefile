@@ -3,7 +3,7 @@ CFLAGS = -O2 -DNDEBUG
 #CFLAGS = -g
 CPP = g++
 #CPP = g++
-OBJS = main.o maxent.o postag.o tokenize.o bidir.o
+OBJS = main.o maxent.o tokenize.o bidir.o morph.o chunking.o
 
 geniatagger: $(OBJS)
 	$(CPP) -o geniatagger $(CFLAGS) $(OBJS)

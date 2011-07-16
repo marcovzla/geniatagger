@@ -230,6 +230,7 @@ viterbi(vector<Token> & vt, const ME_Model & me)
 
 }
 
+/*
 string postag(const string & s, const ME_Model & me)
 {
   list<string> lt;
@@ -249,6 +250,7 @@ string postag(const string & s, const ME_Model & me)
   }
   return tmp;
 }
+*/
 
 /*
  * $Log: postag.cpp,v $

@@ -1,5 +1,5 @@
 /*
- * $Id: bidir.cpp,v 1.8 2005/02/16 10:45:39 tsuruoka Exp $
+ * $Id: bidir.cpp,v 1.9 2005/09/01 14:16:30 tsuruoka Exp $
  */
 
 #include <sys/time.h>
@@ -13,7 +13,6 @@
 #include <set>
 #include "maxent.h"
 #include "common.h"
-//#include <ext/hash_map>
 
 using namespace std;
 
@@ -26,7 +25,9 @@ const bool ONLY_VERTICAL_FEATURES = false;
 
 //extern string normalize(const string & s);
 void tokenize(const string & s1, list<string> & lt);
+string base_form(const string & s, const string & pos);
 
+void bidir_chuning_decode_beam(vector<Token> & vt, const vector<ME_Model> & vme);
 
 static ME_Sample
 mesample(const vector<Token> &vt, int i,
@@ -158,6 +159,166 @@ mesample(const vector<Token> &vt, int i,
   
   return sample;
 }
+
+/*****************************
+////////////////////////////////////////////////////////////////////
+//// Toutanova feature
+////////////////////////////////////////////////////////////////////
+static ME_Sample
+mesample(const vector<Token> &vt, int i,
+         const string & pos_left2, const string & pos_left1, 
+         const string & pos_right1, const string & pos_right2)
+{
+  ME_Sample sample;
+
+  string str = vt[i].str;
+
+  sample.label = vt[i].pos;
+
+  sample.features.push_back("W0_" + str);
+  string prestr = "BOS";
+  if (i > 0) prestr = vt[i-1].str;
+  //  string prestr2 = "BOS2";
+  //  if (i > 1) prestr2 = normalize(vt[i-2].str);
+  string poststr = "EOS";
+  if (i < (int)vt.size()-1) poststr = vt[i+1].str;
+  //  string poststr2 = "EOS2";
+  //  if (i < (int)vt.size()-2) poststr2 = normalize(vt[i+2].str);
+
+  if (!ONLY_VERTICAL_FEATURES) {
+    sample.features.push_back("W-1_" + prestr);
+    sample.features.push_back("W+1_" + poststr);
+
+    sample.features.push_back("W-10_" + prestr + "_" + str);
+    sample.features.push_back("W0+1_" + str  + "_" + poststr);
+  }
+
+  for (int j = 1; j <= 10; j++) {
+    char buf[1000];
+    if (str.size() >= j) {
+      sprintf(buf, "suf%d_%s", j, str.substr(str.size() - j).c_str());
+      sample.features.push_back(buf);
+    }
+    if (str.size() >= j) {
+      sprintf(buf, "pre%d_%s", j, str.substr(0, j).c_str());
+      sample.features.push_back(buf);
+    }
+  }
+  // L
+  if (pos_left1 != "") {
+    sample.features.push_back("P-1_" + pos_left1);
+    sample.features.push_back("P-1W0_"  + pos_left1 + "_" + str);
+  }
+
+  // L2
+  //  if (pos_left2 != "") {
+  //    sample.features.push_back("P-2_" + pos_left2);
+  //  }
+
+  // R
+  if (pos_right1 != "") {
+    sample.features.push_back("P+1_" + pos_right1);
+    sample.features.push_back("P+1W0_"  + pos_right1 + "_" + str);
+  }
+
+  // R2
+  //  if (pos_right2 != "") {
+  //    sample.features.push_back("P+2_" + pos_right2);
+  //  }
+
+  // LR
+  if (pos_left1 != "" && pos_right1 != "") {
+    sample.features.push_back("P-1+1_" + pos_left1 + "_" + pos_right1);
+    //    sample.features.push_back("P-1W0P+1_"  + pos_left1 + "_" + str + "_" + pos_right1);
+  }
+  // LL
+  if (pos_left1 != "" && pos_left2 != "") {
+    sample.features.push_back("P-2-1_" + pos_left2 + "_" + pos_left1);
+    //    sample.features.push_back("P-1W0_"  + pos_left + "_" + str);
+  }
+  // RR
+  if (pos_right1 != "" && pos_right2 != "") {
+    sample.features.push_back("P+1+2_" + pos_right1 + "_" + pos_right2);
+    //    sample.features.push_back("P-1W0_"  + pos_left + "_" + str);
+  }
+
+  // LLR
+  //  if (pos_left1 != "" && pos_left2 != "" && pos_right1 != "") {
+  //    sample.features.push_back("P-2-1+1_" + pos_left2 + "_" + pos_left1 + "_" + pos_right1);
+  //    //    sample.features.push_back("P-1W0_"  + pos_left + "_" + str);
+  //  }
+  // LRR
+  //  if (pos_left1 != "" && pos_right1 != "" && pos_right2 != "") {
+  //    sample.features.push_back("P-1+1+2_" + pos_left1 + "_" + pos_right1 + "_" + pos_right2);
+  //    //    sample.features.push_back("P-1W0_"  + pos_left + "_" + str);
+  //  }
+  // LLRR
+  //  if (pos_left2 != "" && pos_left1 != "" && pos_right1 != "" && pos_right2 != "") {
+  //    sample.features.push_back("P-2-1+1+2_" + pos_left2 + "_" + pos_left1 + "_" + pos_right1 + "_" + pos_right2);
+  //    //    sample.features.push_back("P-1W0_"  + pos_left + "_" + str);
+  //  }
+
+  bool contain_number = false;
+  for (int j = 0; j < str.size(); j++) {
+    if (isdigit(str[j])) {
+      sample.features.push_back("CONTAIN_NUMBER");
+      contain_number = true;
+      break;
+    }
+  }
+  bool contain_upper = false;
+  for (int j = 0; j < str.size(); j++) {
+    if (isupper(str[j])) {
+      sample.features.push_back("CONTAIN_UPPER");
+      contain_upper = true;
+      break;
+    }
+  }
+  bool contain_hyphen = false;
+  for (int j = 0; j < str.size(); j++) {
+    if (str[j] == '-') {
+      sample.features.push_back("CONTAIN_HYPHEN");
+      contain_hyphen = true;
+      break;
+    }
+  }
+  if (contain_number && contain_upper && contain_hyphen) {
+    sample.features.push_back("CONTAIN_NUMBER_UPPER_HYPHEN");
+  }
+  if (contain_upper) {
+    bool company = false;
+    for (int j = i + 1; j <= i + 3; j++) {
+      if (j >= vt.size()) continue;
+      if (vt[j].str == "Co.") company = true;
+      if (vt[j].str == "Inc.") company = true;
+      if (vt[j].str == "Corp.") company = true;
+    }
+    if (company)
+      sample.features.push_back("CRUDE_COMPANY_NAME");
+  }
+
+  bool allupper = true;
+  for (int j = 0; j < str.size(); j++) {
+    if (!isupper(str[j])) {
+      allupper = false;
+      break;
+    }
+  }
+  if (allupper)
+    sample.features.push_back("ALL_UPPER");
+
+  //  for (int j = 0; j < vt.size(); j++)
+  //    cout << vt[j].str << " ";
+  //  cout << endl;
+  //  cout << i << endl;
+  //  for (list<string>::const_iterator j = sample.features.begin(); j != sample.features.end(); j++) {
+  //    cout << *j << " ";
+  //  }
+  //  cout << endl << endl;
+    
+  return sample;
+}
+*****************************/
 
 
 static double entropy(const vector<double>& v)
@@ -314,26 +475,6 @@ struct Hypothesis
   }
 };
 
-struct hashfun_str
-{
-  size_t operator()(const std::string& s) const {
-    assert(sizeof(int) == 4 && sizeof(char) == 1);
-    const int* p = reinterpret_cast<const int*>(s.c_str());
-    size_t v = 0;
-    int n = s.size() / 4;
-    for (int i = 0; i < n; i++, p++) {
-      //      v ^= *p;
-      v ^= *p << (4 * (i % 2)); // note) 0 <= char < 128
-    }
-    int m = s.size() % 4;
-    for (int i = 0; i < m; i++) {
-      v ^= s[4 * n + i] << (i * 8);
-    }
-    return v;
-  }
-};
-
-
 
 void generate_hypotheses(const int order, const Hypothesis & h,
                          const multimap<string, string> & tag_dictionary,
@@ -445,7 +586,7 @@ public:
       "***", "***", 
     };
 
-    for (int i = 0;; i++) {
+    for (int i = 0;; i+=2) {
       if (string(table[i]) == "***") break;
       ptb2pos.insert(make_pair(table[i], table[i+1]));
       pos2ptb.insert(make_pair(table[i+1], table[i]));
@@ -466,18 +607,11 @@ public:
 ParenConverter paren_converter;
 
 string
-bidir_postag(const string & s, const vector<ME_Model> & vme)
+bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme)
 {
   list<string> lt;
   tokenize(s, lt);
-  /*
-  istringstream is(s);
-  string t;
-  while (is >> t) {
-    lt.push_back(t);
-  }
-  */
-  
+
   vector<Token> vt;
   for (list<string>::const_iterator i = lt.begin(); i != lt.end(); i++) {
     string s = *i;
@@ -488,18 +622,31 @@ bidir_postag(const string & s, const vector<ME_Model> & vme)
   const multimap<string, string> dummy;
   //  bidir_decode_search(vt, dummy, vme);
   bidir_decode_beam(vt, dummy, vme);
+  for (size_t i = 0; i < vt.size(); i++) {
+    vt[i].pos = vt[i].prd;
+  }
 
+  bidir_chuning_decode_beam(vt, chunking_vme);
+  
+  
   string tmp;
   for (size_t i = 0; i < vt.size(); i++) {
     string s = vt[i].str;
     string p = vt[i].prd;
-    //     s = paren_converter.Pos2Ptb(s);
+    //    s = paren_converter.Pos2Ptb(s);
     //    p = paren_converter.Pos2Ptb(p);
+    /*
     if (i == 0) tmp += s + "/" + p;
     else        tmp += " " + s + "/" + p;
+    */
+    tmp += s + "\t";
+    tmp += base_form(s, p) + "\t";
+    tmp += p + "\t";
+    tmp += vt[i].cprd + "\n";
   }
   return tmp;
 }
+
 
 
 int push_stop_watch()
@@ -535,14 +682,16 @@ bidir_postagging(vector<Sentence> & vs,
     ntokens += s.size();
     //    if (s.size() > 2) continue;
     bidir_decode_beam(s, tag_dictionary, vme);
-    //    bidir_decode_search(s, tag_dictionary, vme);
+    //bidir_decode_search(s, tag_dictionary, vme);
     //decode_no_context(s, vme[0]);
 
-    //    cout << n << endl;
+    cout << n << endl;
+    /*
     for (size_t k = 0; k < s.size(); k++) {
       cout << s[k].str << "/" << s[k].prd << " ";
     }
     cout << endl;
+    */
     //    if (n > 100) break;
     
     if (n++ % 10 == 0) cerr << ".";
@@ -555,6 +704,10 @@ bidir_postagging(vector<Sentence> & vs,
 
 /*
  * $Log: bidir.cpp,v $
+ * Revision 1.9  2005/09/01 14:16:30  tsuruoka
+ * add hashfun_str
+ * add stop_watch
+ *
  * Revision 1.8  2005/02/16 10:45:39  tsuruoka
  * acl05 submit
  *

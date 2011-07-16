@@ -1,6 +1,6 @@
 
 
-   An English Part-Of-Speech Tagger with Bidirectional Inference
+                     GENIA Tagger
 
                     Tsujii laboratory
                    University of Tokyo
@@ -19,9 +19,19 @@
 
   Prepare a text file containing one sentence per line, then
 
-  > ./tagger < TEXTFILE > TAGGEDTEXT
+  > ./geniatagger < TEXTFILE > TAGGEDTEXT
 
-  
+  The tagger outputs the base forms, part-of-speech (POS) tags, and chunk tags
+in the following tab-separated format.
+
+word1	base1	POStag1	chunktag1
+word2	base2	POStag2	chunktag2
+  :       :        :       :
+
+  Chunks are represented in the IOB2 format (B for BEGIN, I for INSIDE, O for
+OUTSIDE).
+
+
 
 Please send questions and comments to tsuruoka@is.s.u-tokyo.ac.jp.
 ---------------------------------
