@@ -17,8 +17,10 @@ struct MorphDic
   set<string> verbdic;
   set<string> adjdic;
   MorphDic() {}
-  void Init() {
-    cerr << "loading morphdic...";
+  void Init(bool quiet) {
+    if (!quiet) {
+      cerr << "loading morphdic...";
+    }
     LoadEx("./morphdic/noun.exc", nounex);
     LoadEx("./morphdic/verb.exc", verbex);
     LoadEx("./morphdic/adj.exc", adjex);
@@ -26,7 +28,9 @@ struct MorphDic
     LoadIdx("./morphdic/noun.dic", noundic);
     LoadIdx("./morphdic/verb.dic", verbdic);
     LoadIdx("./morphdic/adj.dic", adjdic);
-    cerr << "done." << endl;
+    if (!quiet) {
+      cerr << "done." << endl;
+    }
   }
   void LoadEx(const string & filename, map<string, string> & exmap) {
     ifstream ifile(filename.c_str());
@@ -191,9 +195,9 @@ static string base_form_adverb(const string & s)
 }
 
 
-void init_morphdic()
+void init_morphdic(bool quiet)
 {
-  morphdic.Init();
+  morphdic.Init(quiet);
 }
 
 string base_form(const string & s, const string & pos)

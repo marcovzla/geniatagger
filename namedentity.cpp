@@ -382,16 +382,22 @@ void find_NEs(const ME_Model & me,
 
 ME_Model ne_model;
 
-void load_ne_models()
+void load_ne_models(bool quiet)
 {
   string model_file = "./models_named_entity/model001";
   string wordinfo_file = "./models_named_entity/word_info";
 
-  cerr << "loading named_entity_models.";
+  if (!quiet) {
+    cerr << "loading named_entity_models.";
+  }
   ne_model.load_from_file(model_file);
-  cerr << ".";
+  if (!quiet) {
+    cerr << ".";
+  }
   load_word_info(wordinfo_file);
-  cerr << "done." << endl;
+  if (!quiet) {
+    cerr << "done." << endl;
+  }
 }
 
 

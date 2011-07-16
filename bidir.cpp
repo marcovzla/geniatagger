@@ -609,7 +609,7 @@ ParenConverter paren_converter;
 extern int netagging(vector<Token> & vt);
 
 string
-bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme, bool dont_tokenize)
+bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme, bool dont_tokenize, bool no_ner)
 {
   list<string> lt;
   if (dont_tokenize) {
@@ -636,7 +636,9 @@ bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Mod
 
   bidir_chuning_decode_beam(vt, chunking_vme);
   
-  netagging(vt);
+  if (!no_ner) {
+    netagging(vt);
+  }
 
   string tmp;
   for (size_t i = 0; i < vt.size(); i++) {
