@@ -13,7 +13,7 @@
 
 using namespace std;
 
-string bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & cvme);
+string bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & cvme, bool dont_tokenize);
 void bidir_chunking(vector<Sentence> & vs, const vector<ME_Model> & vme);
 void init_morphdic();
 
@@ -24,6 +24,7 @@ void help()
   cout << "chunk tags." << endl;
   cout << endl;
   cout << "Options:" << endl;
+  cout << "  -nt        don't perform tokenization" << endl;
   cout << "  --help     display this help and exit" << endl;
   cout << endl;
   cout << "Report bugs to <tsuruoka@is.s.u-tokyo.ac.jp>." << endl;
@@ -31,16 +32,19 @@ void help()
 
 void version()
 {
-  cout << "GENIA Tagger 2.0" << endl << endl;
+  cout << "GENIA Tagger 2.0.1" << endl << endl;
 }
 
 int main(int argc, char** argv)
 {
+  bool dont_tokenize = false;
+  
   istream *is(&std::cin);
 
   string ifilename, ofilename;
   for (int i = 1; i < argc; i++) {
     string v = argv[i];
+    if (v == "-nt") { dont_tokenize = true; continue; }
     if (v == "--help") { help(); exit(0); }
     ifilename = argv[i];
   }
@@ -76,7 +80,7 @@ int main(int argc, char** argv)
   
   string line;
   while (getline(*is, line)) {
-    string postagged = bidir_postag(line, vme, vme_chunking);
+    string postagged = bidir_postag(line, vme, vme_chunking, dont_tokenize);
     cout << postagged << endl;
   }
   

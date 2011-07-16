@@ -607,10 +607,16 @@ public:
 ParenConverter paren_converter;
 
 string
-bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme)
+bidir_postag(const string & s, const vector<ME_Model> & vme, const vector<ME_Model> & chunking_vme, bool dont_tokenize)
 {
   list<string> lt;
-  tokenize(s, lt);
+  if (dont_tokenize) {
+    istringstream is(s);
+    string token;
+    while (is >> token) lt.push_back(token);
+  } else {
+    tokenize(s, lt);
+  }
 
   vector<Token> vt;
   for (list<string>::const_iterator i = lt.begin(); i != lt.end(); i++) {

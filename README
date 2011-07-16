@@ -1,6 +1,7 @@
 
 
                      GENIA Tagger
+  - part-of-speech tagging and shallow parsing for biomedical text -
 
                     Tsujii laboratory
                    University of Tokyo
@@ -15,6 +16,7 @@
   if you encounter errors with hash, try commenting out "#define USE_HASH_MAP"
   in "maxent.h".
 
+
 2. How to use
 
   Prepare a text file containing one sentence per line, then
@@ -22,14 +24,24 @@
   > ./geniatagger < TEXTFILE > TAGGEDTEXT
 
   The tagger outputs the base forms, part-of-speech (POS) tags, and chunk tags
-in the following tab-separated format.
+  in the following tab-separated format.
 
-word1	base1	POStag1	chunktag1
-word2	base2	POStag2	chunktag2
-  :       :        :       :
+  word1	base1	POStag1	chunktag1
+  word2	base2	POStag2	chunktag2
+    :     :        :       :
 
-  Chunks are represented in the IOB2 format (B for BEGIN, I for INSIDE, O for
-OUTSIDE).
+  Chunks are represented in the IOB2 format (B for BEGIN, I for INSIDE, and O
+  for OUTSIDE).
+
+
+ 2.1 Tokenization
+
+  This tagger tokenizes the sentence with almost the same policy as the
+  upenn tokenizer (http://www.cis.upenn.edu/~treebank/tokenizer.sed). 
+
+  If you don't want the tagger to perform tokenization, use -nt option.
+  In that case, the input sentences should be already tokenized by your
+  own tokenizer with white spaces. 
 
 
 
