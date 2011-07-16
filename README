@@ -44,6 +44,17 @@
   own tokenizer with white spaces. 
 
 
+References
+
+[1] Yoshimasa Tsuruoka and Jun'ichi Tsujii, Bidirectional Inference with
+    the Easiest-First Strategy for Tagging Sequence Data, Proceedings of
+    HLT/EMNLP 2005, pp. 467-474.
+
+[2] Yoshimasa Tsuruoka, Yuka Tateishi, Jin-Dong Kim, Tomoko Ohta, John
+    McNaught, Sophia Ananiadou, and Jun'ichi Tsujii, Developing a Robust
+    Part-of-Speech Tagger for Biomedical Text, Advances in Informatics -
+    10th Panhellenic Conference on Informatics, LNCS 3746, pp. 382-392, 2005
+
 
 Please send questions and comments to tsuruoka@is.s.u-tokyo.ac.jp.
 ---------------------------------

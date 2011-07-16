@@ -106,7 +106,8 @@ static string base_form_noun(const string & s)
   if (len > 1) {
     string suf1 = s.substr(len - 1);
     if (suf1 == "s") {
-      if (morphdic.LookUpDicVerb(s.substr(0, len - 1))) return s.substr(0, len - 1);
+      if (morphdic.LookUpDicNoun(s.substr(0, len - 1))) return s.substr(0, len - 1);
+      //      if (morphdic.LookUpDicVerb(s.substr(0, len - 1))) return s.substr(0, len - 1);
     }
   }
   if (len > 4) {
