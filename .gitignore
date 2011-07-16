@@ -1,0 +1,4 @@
+# Resulting binary
+geniatagger
+# Object files
+*.o
